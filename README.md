@@ -1,4 +1,4 @@
-# Task Frequency Scheduler Module
+# Task Scheduler Module Based On Timer
 
 This module provides a lightweight cooperative task scheduler based on a fixed 1ms system tick.
 It manages multiple periodic tasks at predefined frequencies (1Hz to 200Hz) using a simple
