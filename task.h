@@ -41,7 +41,6 @@ typedef enum
     TASK_COUNT
 } task_type_t;
 
-
 /* Function Prototypes -------------------------------------------------------*/
 void task_tick(void);
 void task_handler(void);

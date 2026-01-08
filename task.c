@@ -44,12 +44,20 @@
 
 /* Types ---------------------------------------------------------------------*/
 
+/**
+ * @brief Main scheduler structure to hold all dynamic state variables.
+ */
+typedef struct
+{
+    uint32_t tick_count;                           // Global tick counter
+    volatile uint8_t flags[TASK_COUNT];            // Execution flags
+    uint8_t overflow_count[TASK_COUNT];            // Missed deadline counters
+    task_handler_cb_t handler_cb[TASK_COUNT];      // Function pointers
+} task_scheduler_t;
+
 /* Private Variables ---------------------------------------------------------*/
 
-// Global tick count
-static uint32_t tick_count;
-
-// Task tick values
+// Configuration Table (Kept separate as it is CONSTANT data, saves RAM)
 static const uint16_t task_ticks[TASK_COUNT] =
 {
     [TASK_1HZ]   = TICK_1HZ,
@@ -62,86 +70,70 @@ static const uint16_t task_ticks[TASK_COUNT] =
     [TASK_200HZ] = TICK_200HZ
 };
 
-// Global flags for each task
-volatile uint8_t task_flags[TASK_COUNT] = {0};
-
-// Overflow counters for each task
-static uint8_t task_overflow_count[TASK_COUNT] = {0};
-
-// Callback array
-static task_handler_cb_t task_handler_cb[TASK_COUNT] = {0};
-
-/* Private Function Prototypes -----------------------------------------------*/
-
-/* Private Function Definitions ----------------------------------------------*/
+// The Singleton Scheduler Instance
+// Initialized to 0 automatically by static rules, but explicit {0} is good practice.
+static task_scheduler_t scheduler = {0};
 
 /* Function Definitions ------------------------------------------------------*/
 
 /**
  * @brief
- *
  * Increment the tick count and set the flags for tasks based on their frequencies.
- * The task_flags are set to 1 when their respective frequency interval has passed.
- *
- * Resets tick_count after reaching 1 second (1000 ms).
  */
 void task_tick(void)
 {
-	tick_count++;
+    scheduler.tick_count++;
 
-	for (int i = 0; i < TASK_COUNT; i++)
-	{
-		if (tick_count % task_ticks[i] == 0)
-		{
-			if (task_flags[i] == 1)
-			{
-				// Previous flag was not cleared, overflow occurred
-				task_overflow_count[i]++;
-			}
+    for (uint8_t i = 0; i < TASK_COUNT; i++)
+    {
+        // Check if it's time to run this task
+        if (scheduler.tick_count % task_ticks[i] == 0)
+        {
+            if (scheduler.flags[i] == 1)
+            {
+                // Previous flag was not cleared, overflow occurred
+                scheduler.overflow_count[i]++;
+            }
 
-			task_flags[i] = 1;
-		}
-	}
+            scheduler.flags[i] = 1;
+        }
+    }
 
-	if (tick_count >= TICK_1HZ)
-	{
-		tick_count = 0; // Reset every 1 second
-	}
+    if (scheduler.tick_count >= TICK_1HZ)
+    {
+        scheduler.tick_count = 0; // Reset every 1 second
+    }
 }
 
 /**
  * @brief
- *
- * Check if any task flags are set. If a flag is set, reset it and call the respective task handler.
- * This function processes the tasks that are ready to run (based on frequency).
+ * Check if any task flags are set. If a flag is set, reset it and call the handler.
  */
 void task_handler(void)
 {
-	for (uint8_t i = 0; i < TASK_COUNT; i++)
-	{
-		if (task_flags[i])
-		{
-			task_flags[i] = 0;
-			if (task_handler_cb[i] != NULL)
-			{
-				task_handler_cb[i]();
-			}
-		}
-	}
+    for (uint8_t i = 0; i < TASK_COUNT; i++)
+    {
+        if (scheduler.flags[i])
+        {
+            // Clear flag first to allow re-triggering if handler takes too long (optional safety)
+            scheduler.flags[i] = 0;
+
+            if (scheduler.handler_cb[i] != NULL)
+            {
+                scheduler.handler_cb[i]();
+            }
+        }
+    }
 }
 
 /**
  * @brief
- *
  * Register a task handler for a specific task type.
- * The handler will be called when the task flag for that type is set.
- *
- * @param task_type   The task type (e.g., TASK_1HZ, TASK_2HZ, etc.)
- * @param handler     The function to be called for the task
  */
 void task_register_handler(task_type_t task_type, task_handler_cb_t handler)
 {
-    if (task_type < TASK_COUNT) {
-        task_handler_cb[task_type] = handler;
+    if (task_type < TASK_COUNT)
+    {
+        scheduler.handler_cb[task_type] = handler;
     }
 }
